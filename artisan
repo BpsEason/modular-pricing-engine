@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+define('LARAVEL_START', microtime(true));
+
+if (file_exists($file = __DIR__.'/vendor/autoload.php')) {
+    require $file;
+} else {
+    echo 'Please install Composer dependencies.' . PHP_EOL;
+    exit(1);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Run The Artisan Application
+|--------------------------------------------------------------------------
+|
+| When we run the console application, the current CLI command will be
+| executed in this console and the response is sent back to a terminal
+| or browser. Let's enjoy the sweet convenience the CLI provides us!
+|
+*/
+
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+
+$status = $kernel->handle(
+    $input = new Symfony\Component\Console\Input\ArgvInput,
+    new Symfony\Component\Console\Output\ConsoleOutput
+);
+
+$kernel->terminate($input, $status);
+
+exit($status);
