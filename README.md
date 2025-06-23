@@ -29,7 +29,7 @@
 ## 安裝步驟
 1. 克隆或下載專案：
    ```bash
-   git clone https://github.com/<your-repo>/modular-pricing-engine.git
+   git clone https://github.com/BpsEason/modular-pricing-engine.git
    cd modular-pricing-engine
    ```
 2. 安裝 PHP 依賴：
