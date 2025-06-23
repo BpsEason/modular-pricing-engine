@@ -168,6 +168,65 @@ graph TD
 
 通知邏輯（`app/Domain/Notifications`）目前為示範，展示裝飾器模式應用。
 
+## 核心代碼示例
+以下是價格計算引擎的關鍵代碼片段，展示策略模式與責任鏈模式的應用：
+
+### PriceModifierInterface
+定義修飾器的統一接口，確保所有修飾器遵循相同規範：
+```php
+// app/Domain/Price/Contracts/PriceModifierInterface.php
+namespace App\Domain\Price\Contracts;
+
+use App\Domain\Price\DTO\PriceContext;
+
+interface PriceModifierInterface
+{
+    /**
+     * 應用價格修飾邏輯
+     * @param PriceContext $context 價格計算上下文
+     * @return PriceContext 修改後的上下文
+     */
+    public function apply(PriceContext $context): PriceContext;
+
+    /**
+     * 獲取修飾器優先級，值越小越先執行
+     * @return int
+     */
+    public function getPriority(): int;
+}
+```
+
+### PriceCalculator
+負責按優先級協調修飾器，實現責任鏈模式：
+```php
+// app/Domain/Price/PriceCalculator.php
+namespace App\Domain\Price;
+
+use App\Domain\Price\Contracts\PriceModifierInterface;
+use App\Domain\Price\DTO\PriceContext;
+
+class PriceCalculator
+{
+    protected array $modifiers;
+
+    public function __construct(array $modifiers)
+    {
+        // 按優先級排序修飾器
+        usort($modifiers, fn($a, $b) => $a->getPriority() <=> $b->getPriority());
+        $this->modifiers = $modifiers;
+    }
+
+    public function calculate(PriceContext $context): PriceContext
+    {
+        // 依次應用修飾器（責任鏈）
+        foreach ($this->modifiers as $modifier) {
+            $context = $modifier->apply($context);
+        }
+        return $context;
+    }
+}
+```
+
 ## 開發者導覽
 以下是專案關鍵檔案與其責任，幫助你快速上手：
 
@@ -180,6 +239,81 @@ graph TD
 | `config/pricing.php` | 配置修飾器順序與通知裝飾器。 |
 | `tests/Unit/PriceCalculatorTest.php` | 單元測試，驗證計算邏輯。 |
 | `tests/Feature/OrderPricingTest.php` | 功能測試，模擬 API 請求。 |
+
+### 核心介面與 DTO 概覽
+為了實現模組化與可擴展性，專案定義了幾個關鍵的抽象與資料結構：
+
+#### `PriceModifierInterface` (核心策略介面)
+所有價格修飾器都必須實現此介面，定義了價格修改的核心行為和優先級。
+```php
+// app/Domain/Price/Contracts/PriceModifierInterface.php
+namespace App\Domain\Price\Contracts;
+
+use App\Domain\Price\DTO\PriceContext;
+
+interface PriceModifierInterface
+{
+    /**
+     * 應用價格修改邏輯。
+     *
+     * @param PriceContext $context 當前的價格上下文
+     * @return PriceContext 經過修改後的價格上下文
+     */
+    public function apply(PriceContext $context): PriceContext;
+
+    /**
+     * 取得此修飾器的應用優先級。
+     * 數值越小，優先級越高，越先被應用。
+     *
+     * @return int
+     */
+    public function getPriority(): int;
+}
+```
+
+#### `PriceContext` (價格上下文 DTO)
+在價格計算流程中傳遞的資料容器，記錄原始價格、當前價格及所有折扣修改。
+```php
+// app/Domain/Price/DTO/PriceContext.php
+namespace App\Domain\Price\DTO;
+
+use Illuminate\Support\Collection;
+
+class PriceContext
+{
+    public float $originalPrice;
+    public float $currentPrice;
+    public Collection $modifications;
+    public array $items;
+    public ?int $userId;
+    public ?string $couponCode;
+    public ?string $paymentMethod;
+
+    public function __construct(
+        float $originalPrice,
+        array $items = [],
+        ?int $userId = null,
+        ?string $couponCode = null,
+        ?string $paymentMethod = null
+    ) {
+        $this->originalPrice = $originalPrice;
+        $this->currentPrice = $originalPrice;
+        $this->modifications = new Collection();
+        $this->items = $items;
+        $this->userId = $userId;
+        $this->couponCode = $couponCode;
+        $this->paymentMethod = $paymentMethod;
+    }
+
+    public function addModification(string $key, float $amount): void
+    {
+        $this->modifications->put($key, $amount);
+        $this->currentPrice += $amount;
+    }
+
+    // 更多 getter 方法略
+}
+```
 
 ### 新增自訂修飾器範例
 若需新增「節日折扣」修飾器：
@@ -233,6 +367,40 @@ graph TD
    }
    ```
 
+### 現有修飾器示例
+以下是 `FlashSaleModifier` 的實現，展示如何處理閃購邏輯：
+```php
+// app/Domain/Price/Modifiers/FlashSaleModifier.php
+namespace App\Domain\Price\Modifiers;
+
+use App\Domain\Price\Contracts\PriceModifierInterface;
+use App\Domain\Price\DTO\PriceContext;
+use Carbon\Carbon;
+
+class FlashSaleModifier implements PriceModifierInterface
+{
+    public function apply(PriceContext $context): PriceContext
+    {
+        // 模擬閃購時間（未來應從資料庫取得）
+        $flashSaleEnd = Carbon::parse('2025-06-30');
+        if (Carbon::now()->lessThanOrEqualTo($flashSaleEnd)) {
+            foreach ($context->items as $item) {
+                if ($item['is_flash_sale'] ?? false) {
+                    $discount = -($item['price'] * $item['qty'] * 0.15); // 15% 折扣
+                    $context->addModification('flash_sale', $discount);
+                }
+            }
+        }
+        return $context;
+    }
+
+    public function getPriority(): int
+    {
+        return 100; // 優先於其他折扣
+    }
+}
+```
+
 ## CI/CD 與自動化
 專案內建 GitHub Actions 工作流（`.github/workflows/ci.yml`），自動執行：
 - 依賴安裝
@@ -251,7 +419,49 @@ graph TD
 
 ### `PriceContext` DTO 在專案中扮演什麼角色？為什麼需要它？
 `PriceContext` 是一個資料傳輸物件（DTO），作為價格計算流程的狀態容器，封裝原始價格、當前價格、訂單商品、用戶資訊、優惠券代碼等數據。  
-它在責任鏈中傳遞，確保修飾器間不直接依賴外部狀態，保持獨立性。同時，它記錄每一步的折扣修改，方便追蹤計算過程，提升可維護性與可測試性。
+它在責任鏈中傳遞，確保修飾器間不直接依賴外部狀態，保持獨立性。同時，它記錄每一步的折扣修改，方便追蹤計算過程，提升可維護性與可測試性。  
+以下是 `PriceContext` 的核心結構：
+```php
+// app/Domain/Price/DTO/PriceContext.php
+namespace App\Domain\Price\DTO;
+
+use Illuminate\Support\Collection;
+
+class PriceContext
+{
+    public float $originalPrice;
+    public float $currentPrice;
+    public Collection $modifications;
+    public array $items;
+    public ?int $userId;
+    public ?string $couponCode;
+    public ?string $paymentMethod;
+
+    public function __construct(
+        float $originalPrice,
+        array $items = [],
+        ?int $userId = null,
+        ?string $couponCode = null,
+        ?string $paymentMethod = null
+    ) {
+        $this->originalPrice = $originalPrice;
+        $this->currentPrice = $originalPrice;
+        $this->modifications = new Collection();
+        $this->items = $items;
+        $this->userId = $userId;
+        $this->couponCode = $couponCode;
+        $this->paymentMethod = $paymentMethod;
+    }
+
+    public function addModification(string $key, float $amount): void
+    {
+        $this->modifications->put($key, $amount);
+        $this->currentPrice += $amount;
+    }
+
+    // 更多 getter 方法略
+}
+```
 
 ### 如何確保價格修飾器按正確順序執行？順序錯誤會有什麼影響？
 修飾器順序透過 `PriceModifierInterface` 的 `getPriority()` 方法與 `config/pricing.php` 的配置控制。`PriceCalculator` 在初始化時按優先級（值越小越先執行）排序修飾器。  
@@ -303,3 +513,7 @@ graph TD
 
 ## 授權
 本專案採用 MIT 授權，詳見 `composer.json`。
+
+---
+
+感謝你的使用！如果有任何問題，隨時開 Issue，我們會盡快協助。
