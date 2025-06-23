@@ -2,10 +2,13 @@
 
 這是一個基於 Laravel 的模組化價格計算引擎，模擬真實電商場景中複雜的價格計算需求，例如促銷活動、會員分級折扣、優惠券、支付方式回饋等。專案採用策略模式、責任鏈模式與裝飾器模式，實現靈活、可擴充的架構，適合用來學習進階 Laravel 應用或作為開源專案展示。我們力求結構清晰、邏輯乾淨，方便開發者快速上手。
 
+[![CI](https://github.com/BpsEason/modular-pricing-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/BpsEason/modular-pricing-engine/actions)
+[![Coverage Status](https://coveralls.io/repos/github/BpsEason/modular-pricing-engine/badge.svg?branch=main)](https://coveralls.io/github/BpsEason/modular-pricing-engine?branch=main)
+
 ## 專案目的
 本專案旨在解決電商系統中常見的價格計算挑戰，提供一個可重用、可測試的解決方案。主要目標：
 - 展示如何用**策略模式**與**責任鏈模式**實現靈活的價格修飾邏輯。
-- 透過**裝飾器模式**設計可擴展的通知系統（目前為示範）。
+- 透過**裝飾器模式**設計可擴展的通知系統（支援日誌與模擬郵件通知）。
 - 遵循 DDD（領域驅動設計）基本原則，將價格計算邏輯與應用層分離。
 - 提供完整的單元測試與功能測試，確保邏輯可靠。
 
@@ -16,14 +19,14 @@
 - ✅ 符合開閉原則，新增價格修飾器無需修改核心代碼。
 - ✅ 使用 DDD 領域模型與 DTO（PriceContext）管理數據流。
 - ✅ 測試驅動設計，單元測試與功能測試覆蓋核心邏輯與 API。
-- ✅ 透過 `config/pricing.php` 配置修飾器順序，易於維護與擴充。
+- ✅ 透過 `config/pricing.php` 配置修飾器順序與通知裝飾器，易於維護與擴充。
 - ✅ 支援 CI/CD，內建 GitHub Actions 自動化測試流程。
 
 ## 環境需求
 - PHP >= 8.2
 - Composer
 - SQLite（或 MySQL/PostgreSQL，需調整 `.env` 設定）
-- Laravel 10.x
+- Laravel 11.x
 - （可選）Node.js（若需前端資源編譯）
 
 ## 安裝步驟
@@ -76,34 +79,34 @@
           {
               "id": 1,
               "name": "Test Item",
-              "price": 1000,
-              "qty": 1,
-              "is_flash_sale": true
+              "price": 500,
+              "qty": 1
+          },
+          {
+              "id": 2,
+              "name": "Another Item",
+              "price": 250,
+              "qty": 2
           }
       ],
       "user_id": 1,
       "coupon_code": "SAVE20",
-      "payment_method": "line_pay"
+      "payment_method": "credit_card_visa"
   }
   ```
 - **回應範例**：
   ```json
   {
       "original_price": 1000.0,
-      "final_price": 772.73,
+      "final_price": 651.7,
       "modifications": {
-          "flash_sale": -150.0,
+          "flash_sale": -200.0,
+          "holiday_discount": -80.0,
           "coupon_discount": -20.0,
-          "member_discount": -41.5,
-          "payment_method_discount": -15.77
+          "member_discount": -35.0,
+          "payment_method_discount": -13.3
       },
-      "details": "Price calculated successfully with applied modifiers.",
-      "context": {
-          "user_id": 1,
-          "user_member_level": "gold",
-          "coupon_code_used": "SAVE20",
-          "payment_method_used": "line_pay"
-      }
+      "message": "Price calculated successfully."
   }
   ```
 
@@ -119,9 +122,9 @@ vendor/bin/phpunit
 
 生成測試覆蓋率報告：
 ```bash
-vendor/bin/phpunit --coverage-html coverage
+vendor/bin/phpunit --coverage-clover coverage.xml
 ```
-報告將生成於 `coverage/` 目錄，可用瀏覽器查看詳細覆蓋率。
+報告將生成於 `coverage.xml`，並透過 Coveralls 顯示覆蓋率。
 
 ## 架構概覽
 專案採用模組化設計，核心邏輯位於 `app/Domain/Price` 和 `app/Services`。以下是架構流程圖：
@@ -134,18 +137,28 @@ graph TD
     D --> E[PriceContext]
     D --> F[PriceModifiers]
     F --> G[FlashSaleModifier]
-    F --> H[CouponModifier]
-    F --> I[MemberDiscountModifier]
-    F --> J[PaymentMethodModifier]
+    F --> H[HolidayDiscountModifier]
+    F --> I[CouponModifier]
+    F --> J[MemberDiscountModifier]
+    F --> K[PaymentMethodModifier]
+    C --> L[Notifier]
+    L --> M[EmailNotifier]
+    L --> N[LoggerNotifier]
     E --> F
     subgraph 領域層 [領域層]
         D[PriceCalculator]:::core
         E[PriceContext]:::dto
         F[PriceModifiers]:::modifiers
         G[FlashSaleModifier]:::modifier
-        H[CouponModifier]:::modifier
-        I[MemberDiscountModifier]:::modifier
-        J[PaymentMethodModifier]:::modifier
+        H[HolidayDiscountModifier]:::modifier
+        I[CouponModifier]:::modifier
+        J[MemberDiscountModifier]:::modifier
+        K[PaymentMethodModifier]:::modifier
+    end
+    subgraph 通知層 [通知層]
+        L[Notifier]:::notifier
+        M[EmailNotifier]:::notifier
+        N[LoggerNotifier]:::notifier
     end
     subgraph 應用層 [應用層]
         B[OrderController]:::controller
@@ -155,18 +168,18 @@ graph TD
     classDef dto fill:#bbf,stroke:#333;
     classDef modifiers fill:#dfd,stroke:#333;
     classDef modifier fill:#efe,stroke:#333;
+    classDef notifier fill:#bdf,stroke:#333;
     classDef controller fill:#fbf,stroke:#333;
     classDef service fill:#bfb,stroke:#333;
 ```
 
 ### 主要元件說明
 - **OrderController**（`app/Http/Controllers`）：處理 HTTP 請求，驗證輸入並呼叫服務層。
-- **OrderPricingService**（`app/Services`）：應用層服務，負責協調價格計算，注入上下文（如用戶、支付方式）。
+- **OrderPricingService**（`app/Services`）：應用層服務，負責協調價格計算與通知發送，注入上下文（如用戶、支付方式）。
 - **PriceCalculator**（`app/Domain/Price`）：核心計算引擎，按優先級應用修飾器（責任鏈模式）。
 - **PriceContext**（`app/Domain/Price/DTO`）：DTO，記錄原始價格、當前價格與折扣紀錄。
 - **PriceModifiers**（`app/Domain/Price/Modifiers`）：獨立價格修飾器（如閃購、優惠券），實現策略模式。每個修飾器可作為模組重用，新增修飾器只需實作 `PriceModifierInterface` 並註冊於 `config/pricing.php`。
-
-通知邏輯（`app/Domain/Notifications`）目前為示範，展示裝飾器模式應用。
+- **Notifiers**（`app/Domain/Price/Notifiers`）：通知系統，透過裝飾器模式支援日誌記錄與模擬郵件發送。
 
 ## 核心代碼示例
 以下是價格計算引擎的關鍵代碼片段，展示策略模式與責任鏈模式的應用：
@@ -204,23 +217,25 @@ namespace App\Domain\Price;
 
 use App\Domain\Price\Contracts\PriceModifierInterface;
 use App\Domain\Price\DTO\PriceContext;
+use Illuminate\Support\Collection;
 
 class PriceCalculator
 {
-    protected array $modifiers;
+    private Collection $modifiers;
 
     public function __construct(array $modifiers)
     {
-        // 按優先級排序修飾器
-        usort($modifiers, fn($a, $b) => $a->getPriority() <=> $b->getPriority());
-        $this->modifiers = $modifiers;
+        $this->modifiers = collect($modifiers)->sortBy(fn(PriceModifierInterface $modifier) => $modifier->getPriority());
     }
 
     public function calculate(PriceContext $context): PriceContext
     {
-        // 依次應用修飾器（責任鏈）
         foreach ($this->modifiers as $modifier) {
             $context = $modifier->apply($context);
+        }
+        if ($context->getCurrentPrice() < 0) {
+            $finalAdjustment = -$context->getCurrentPrice();
+            $context->addModification('final_floor_adjustment', $finalAdjustment);
         }
         return $context;
     }
@@ -235,6 +250,7 @@ class PriceCalculator
 | `app/Domain/Price/PriceCalculator.php` | 負責按優先級應用所有修飾器，核心計算邏輯。 |
 | `app/Domain/Price/DTO/PriceContext.php` | 價格計算的上下文，管理價格與折扣紀錄。 |
 | `app/Domain/Price/Modifiers/*.php` | 各價格修飾器，實現具體折扣邏輯。 |
+| `app/Domain/Price/Notifiers/*.php` | 通知系統，支援日誌與模擬郵件發送。 |
 | `app/Services/OrderPricingService.php` | 應用層服務，橋接控制器與領域層。 |
 | `config/pricing.php` | 配置修飾器順序與通知裝飾器。 |
 | `tests/Unit/PriceCalculatorTest.php` | 單元測試，驗證計算邏輯。 |
@@ -284,7 +300,7 @@ class PriceContext
     public float $originalPrice;
     public float $currentPrice;
     public Collection $modifications;
-    public array $items;
+    public Collection $items;
     public ?int $userId;
     public ?string $couponCode;
     public ?string $paymentMethod;
@@ -299,7 +315,7 @@ class PriceContext
         $this->originalPrice = $originalPrice;
         $this->currentPrice = $originalPrice;
         $this->modifications = new Collection();
-        $this->items = $items;
+        $this->items = new Collection($items);
         $this->userId = $userId;
         $this->couponCode = $couponCode;
         $this->paymentMethod = $paymentMethod;
@@ -309,6 +325,9 @@ class PriceContext
     {
         $this->modifications->put($key, $amount);
         $this->currentPrice += $amount;
+        if ($this->currentPrice < 0) {
+            $this->currentPrice = 0.0;
+        }
     }
 
     // 更多 getter 方法略
@@ -356,7 +375,7 @@ class PriceContext
 3. 測試新修飾器：
    ```php
    // tests/Unit/PriceCalculatorTest.php
-   public function it_applies_holiday_discount_correctly()
+   public function test_holiday_discount_modifier_applies_correctly()
    {
        $this->travelTo(Carbon::parse('2025-12-25'));
        $calculator = new PriceCalculator([new HolidayDiscountModifier()]);
@@ -381,15 +400,13 @@ class FlashSaleModifier implements PriceModifierInterface
 {
     public function apply(PriceContext $context): PriceContext
     {
-        // 模擬閃購時間（未來應從資料庫取得）
-        $flashSaleEnd = Carbon::parse('2025-06-30');
-        if (Carbon::now()->lessThanOrEqualTo($flashSaleEnd)) {
-            foreach ($context->items as $item) {
-                if ($item['is_flash_sale'] ?? false) {
-                    $discount = -($item['price'] * $item['qty'] * 0.15); // 15% 折扣
-                    $context->addModification('flash_sale', $discount);
-                }
-            }
+        $flashSaleActive = Carbon::now()->between(
+            Carbon::parse('2025-01-01 00:00:00'),
+            Carbon::parse('2025-01-01 23:59:59')
+        );
+        if ($flashSaleActive) {
+            $discount = -$context->currentPrice * 0.2; // 20% 折扣
+            $context->addModification('flash_sale', $discount);
         }
         return $context;
     }
@@ -404,7 +421,7 @@ class FlashSaleModifier implements PriceModifierInterface
 ## CI/CD 與自動化
 專案內建 GitHub Actions 工作流（`.github/workflows/ci.yml`），自動執行：
 - 依賴安裝
-- 資料庫遷移
+- 資料庫設定
 - 測試運行
 - 測試覆蓋率報告（透過 Coveralls 上傳）
 
@@ -415,7 +432,7 @@ class FlashSaleModifier implements PriceModifierInterface
 ### 這個專案的核心價格計算邏輯採用了哪些設計模式？為什麼選擇這些模式？
 核心價格計算採用了**策略模式**與**責任鏈模式**。我們將不同價格修飾邏輯（如會員折扣、閃購、優惠券）封裝成獨立的策略（`PriceModifier` 實現類），每種修飾器專注於單一邏輯，保持高內聚。  
 責任鏈模式則用於組織修飾器的執行順序，`PriceCalculator` 按優先級（透過 `getPriority()`）依次調用修飾器，將 `PriceContext` 在鏈中傳遞，確保修改邏輯互不干擾。  
-這樣的設計符合**開閉原則**，允許新增修飾器而不改動核心代碼。此外，通知系統示範了**裝飾器模式**，可動態擴展通知行為（如日誌記錄、延遲發送）。
+這樣的設計符合**開閉原則**，允許新增修飾器而不改動核心代碼。此外，通知系統採用**裝飾器模式**，透過 `NotifierDecorator` 動態擴展通知行為（如日誌記錄）。
 
 ### `PriceContext` DTO 在專案中扮演什麼角色？為什麼需要它？
 `PriceContext` 是一個資料傳輸物件（DTO），作為價格計算流程的狀態容器，封裝原始價格、當前價格、訂單商品、用戶資訊、優惠券代碼等數據。  
@@ -432,7 +449,7 @@ class PriceContext
     public float $originalPrice;
     public float $currentPrice;
     public Collection $modifications;
-    public array $items;
+    public Collection $items;
     public ?int $userId;
     public ?string $couponCode;
     public ?string $paymentMethod;
@@ -447,7 +464,7 @@ class PriceContext
         $this->originalPrice = $originalPrice;
         $this->currentPrice = $originalPrice;
         $this->modifications = new Collection();
-        $this->items = $items;
+        $this->items = new Collection($items);
         $this->userId = $userId;
         $this->couponCode = $couponCode;
         $this->paymentMethod = $paymentMethod;
@@ -457,6 +474,9 @@ class PriceContext
     {
         $this->modifications->put($key, $amount);
         $this->currentPrice += $amount;
+        if ($this->currentPrice < 0) {
+            $this->currentPrice = 0.0;
+        }
     }
 
     // 更多 getter 方法略
@@ -465,10 +485,10 @@ class PriceContext
 
 ### 如何確保價格修飾器按正確順序執行？順序錯誤會有什麼影響？
 修飾器順序透過 `PriceModifierInterface` 的 `getPriority()` 方法與 `config/pricing.php` 的配置控制。`PriceCalculator` 在初始化時按優先級（值越小越先執行）排序修飾器。  
-若順序錯誤，可能導致價格計算偏差。例如，若會員折扣先於閃購應用，折扣基數為原始價格；若閃購先應用，則基數為閃購後價格，這可能違反商業邏輯，甚至造成負價格等錯誤。
+若順序錯誤，可能導致價格計算偏差。例如，若會員折扣先於閃購應用，折扣基數為原始價格；若閃購先應用，則基數為閃購後價格，這可能違反商業邏輯，甚至造成負價格（已透過 `PriceContext` 防止）。
 
 ### 模組化引擎如何與 Laravel 框架整合？
-我們透過 `PricingEngineServiceProvider` 將 `PriceCalculator` 與 `OrderPricingService` 綁定至 Laravel 服務容器。服務提供者從 `config/pricing.php` 讀取修飾器配置，動態解析並注入 `PriceCalculator`。  
+我們透過 `PricingEngineServiceProvider` 將 `PriceCalculator` 和 `OrderPricingService` 綁定至 Laravel 服務容器。服務提供者從 `config/pricing.php` 讀取修飾器與通知器配置，動態解析並注入實例。  
 在 `OrderController` 中，僅需依賴注入 `OrderPricingService`，框架會自動解析實例，實現控制器與領域邏輯的解耦，提升可維護性。
 
 ### `FlashSaleModifier` 和 `CouponModifier` 的資料目前如何處理？未來如何改進？
@@ -479,11 +499,11 @@ class PriceContext
 專案包含**單元測試**（`PriceCalculatorTest`）與**功能測試**（`OrderPricingTest`）。  
 - **單元測試**：聚焦領域邏輯，驗證單個修飾器或 `PriceCalculator` 的正確性，不依賴資料庫或 HTTP，執行速度快。  
 - **功能測試**：模擬 API 請求，測試端到端流程，包括控制器、服務層與領域層整合，確保回應結構與結果正確。  
-我們使用 `RefreshDatabase` 確保測試環境乾淨，並透過 Carbon 的 `travelTo` 模擬時間，方便測試如閃購的時間敏感邏輯。
+我們使用 Carbon 的 `travelTo` 模擬時間，方便測試如閃購的時間敏感邏輯。
 
 ### 專案如何體現模組化與可擴展性？
 模組化體現於每個 `PriceModifier` 作為獨立模組，僅處理特定折扣邏輯，透過 `PriceContext` 介面交互，實現高內聚、低耦合。  
-可擴展性則透過開閉原則實現：新增折扣只需實作 `PriceModifierInterface` 並註冊至 `config/pricing.php`，無需改動核心代碼。服務容器綁定也便於替換實現。
+可擴展性則透過開閉原則實現：新增折扣只需實作 `PriceModifierInterface` 並註冊至 `config/pricing.php`，無需改動核心代碼。通知系統同樣可透過新增 `NotifierDecorator` 擴展。
 
 ### DDD（領域驅動設計）在專案中如何應用？
 我們遵循 DDD 基本原則，將價格計算定義為核心領域，邏輯封裝於 `app/Domain/Price`。  
@@ -493,13 +513,12 @@ class PriceContext
 - **資料動態化**：將閃購與優惠券資料移至資料庫，透過 Repository 管理。
 - **性能優化**：引入 Redis 快取，減少資料庫查詢。
 - **通知系統**：實現真實 Email/SMS 發送，擴展裝飾器（如重試、異步）。
-- **多租戶支援**：完善 `InitializeTenancy` 中間件，支援多租戶場景。
+- **多租戶支援**：完善多租戶架構，支援不同商戶的價格規則。
 
 ## 未來改進
 - 實作完整通知系統（Email、SMS）。
 - 加入 Redis 快取，優化閃購與優惠券查詢。
 - 擴展商品模型，支援更細緻的價格規則。
-- 支援多租戶（目前僅保留 `InitializeTenancy` 中間件）。
 - 部署免費 Demo API（例如 Vercel + SQLite）。
 
 ## 注意事項
@@ -513,7 +532,3 @@ class PriceContext
 
 ## 授權
 本專案採用 MIT 授權，詳見 `composer.json`。
-
----
-
-感謝你的使用！如果有任何問題，隨時開 Issue，我們會盡快協助。
