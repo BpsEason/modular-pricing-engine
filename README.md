@@ -2,9 +2,6 @@
 
 這是一個基於 Laravel 的模組化價格計算引擎，模擬真實電商場景中複雜的價格計算需求，例如促銷活動、會員分級折扣、優惠券、支付方式回饋等。專案採用策略模式、責任鏈模式與裝飾器模式，實現靈活、可擴充的架構，適合用來學習進階 Laravel 應用或作為開源專案展示。我們力求結構清晰、邏輯乾淨，方便開發者快速上手。
 
-[![CI](https://github.com/<你的GitHub用戶名>/modular-pricing-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/<你的GitHub用戶名>/modular-pricing-engine/actions)
-[![Coverage Status](https://coveralls.io/repos/github/<你的GitHub用戶名>/modular-pricing-engine/badge.svg?branch=main)](https://coveralls.io/github/<你的GitHub用戶名>/modular-pricing-engine?branch=main)
-
 ## 專案目的
 本專案旨在解決電商系統中常見的價格計算挑戰，提供一個可重用、可測試的解決方案。主要目標：
 - 展示如何用**策略模式**與**責任鏈模式**實現靈活的價格修飾邏輯。
