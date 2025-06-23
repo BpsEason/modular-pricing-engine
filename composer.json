@@ -1,23 +1,21 @@
 {
-    "name": "laravel/laravel",
-    "type": "project",
-    "description": "A Laravel project demonstrating modular pricing engine with design patterns.",
-    "keywords": ["framework", "laravel", "design patterns", "ddd", "strategy", "chain of responsibility", "decorator", "pricing"],
+    "name": "your-vendor/modular-pricing-engine",
+    "description": "A modular pricing engine built with Laravel for complex calculations.",
+    "keywords": ["laravel", "pricing", "ecommerce", "modular", "domain-driven-design"],
     "license": "MIT",
+    "type": "project",
     "require": {
         "php": "^8.2",
-        "guzzlehttp/guzzle": "^7.2",
-        "laravel/framework": "^10.0",
-        "laravel/sanctum": "^3.2",
+        "laravel/framework": "^11.0",
         "laravel/tinker": "^2.8"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
         "laravel/pint": "^1.0",
-        "laravel/sail": "^1.18",
+        "laravel/sail": "^1.26",
         "mockery/mockery": "^1.4.4",
-        "nunomaduro/collision": "^7.0",
-        "phpunit/phpunit": "^10.0",
+        "nunomaduro/collision": "^8.0",
+        "phpunit/phpunit": "^11.0",
         "spatie/laravel-ignition": "^2.0"
     },
     "autoload": {
@@ -45,7 +43,8 @@
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi"
-        ]
+        ],
+        "test": "vendor/bin/phpunit"
     },
     "extra": {
         "laravel": {
