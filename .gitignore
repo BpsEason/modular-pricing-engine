@@ -12,4 +12,15 @@ npm-debug.log
 yarn-error.log
 .idea
 .vscode
-/.history
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.vagrant
+.byebug_history
+.ruby-version
+.tool-versions
+.env.dusk.*
+.env.testing
+/coverage.xml
+/bootstrap/cache/*.php
+!.github
